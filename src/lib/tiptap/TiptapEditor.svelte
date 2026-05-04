@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Editor } from '@tiptap/core';
+	import { Editor, type Content } from '@tiptap/core';
 	import { StarterKit } from '@tiptap/starter-kit';
 	import BubbleMenu from '@tiptap/extension-bubble-menu';
 	import CharacterCount from '@tiptap/extension-character-count';
@@ -40,7 +40,7 @@
 	import { CHARACTER_LIMIT, SAMPLE_CONTENT, type RichTextSnapshot } from './editor-data';
 
 	type Props = {
-		initialContent?: string;
+		initialContent?: Content;
 		onChange?: (snapshot: RichTextSnapshot) => void;
 	};
 
@@ -50,8 +50,11 @@
 	};
 
 	type UploadResponse = {
+		headers?: Record<string, string>;
 		url?: string;
 		message?: string;
+		strategy?: 'presigned' | 'proxy';
+		uploadUrl?: string;
 	};
 
 	const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
@@ -120,6 +123,64 @@
 		return null;
 	}
 
+	async function uploadThroughApi(file: File) {
+		const formData = new FormData();
+		formData.set('image', file);
+
+		const response = await fetch('/api/uploads', {
+			method: 'POST',
+			body: formData
+		});
+		const result = (await response.json()) as UploadResponse;
+
+		if (!response.ok || !result.url) {
+			throw new Error(result.message ?? 'Upload failed.');
+		}
+
+		return result.url;
+	}
+
+	async function uploadWithPresignedUrl(file: File) {
+		const response = await fetch('/api/uploads', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				name: file.name,
+				size: file.size,
+				type: file.type
+			})
+		});
+		const result = (await response.json()) as UploadResponse;
+
+		if (response.status === 409 && result.strategy === 'proxy') {
+			return uploadThroughApi(file);
+		}
+
+		if (!response.ok || !result.url) {
+			throw new Error(result.message ?? 'Upload failed.');
+		}
+
+		if (result.strategy !== 'presigned') return result.url;
+
+		if (!result.uploadUrl) {
+			throw new Error('Upload URL was not returned.');
+		}
+
+		const uploadResponse = await fetch(result.uploadUrl, {
+			method: 'PUT',
+			headers: result.headers ?? { 'Content-Type': file.type },
+			body: file
+		});
+
+		if (!uploadResponse.ok) {
+			throw new Error('Image upload to storage failed.');
+		}
+
+		return result.url;
+	}
+
 	async function uploadImageFile(file: File, editor: Editor) {
 		const validationError = validateImageFile(file);
 
@@ -128,22 +189,12 @@
 			return;
 		}
 
-		const formData = new FormData();
-		formData.set('image', file);
 		uploadState = { status: 'uploading', message: `Uploading ${file.name}` };
 
 		try {
-			const response = await fetch('/api/uploads', {
-				method: 'POST',
-				body: formData
-			});
-			const result = (await response.json()) as UploadResponse;
+			const url = await uploadWithPresignedUrl(file);
 
-			if (!response.ok || !result.url) {
-				throw new Error(result.message ?? 'Upload failed.');
-			}
-
-			editor.chain().focus().setImage({ src: result.url, alt: file.name, title: file.name }).run();
+			editor.chain().focus().setImage({ src: url, alt: file.name, title: file.name }).run();
 			uploadState = { status: 'done', message: `Inserted ${file.name}` };
 		} catch (error) {
 			uploadState = {

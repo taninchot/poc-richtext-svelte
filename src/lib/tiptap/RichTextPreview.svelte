@@ -3,6 +3,7 @@
 
 	type Props = {
 		doc: JSONContent;
+		variant?: 'panel' | 'article';
 	};
 
 	type JsonMark = NonNullable<JSONContent['marks']>[number];
@@ -12,7 +13,7 @@
 	const IMAGE_SRC = /^(\/|https?:\/\/)/i;
 	const LINK_HREF = /^(\/|https?:\/\/|mailto:)/i;
 
-	let { doc }: Props = $props();
+	let { doc, variant = 'panel' }: Props = $props();
 
 	function nodes(node: JSONContent) {
 		return node.content ?? [];
@@ -149,7 +150,7 @@
 	{/if}
 {/snippet}
 
-<div class="preview-body">
+<div class="preview-body" class:article={variant === 'article'}>
 	{@render renderNode(doc)}
 </div>
 
@@ -163,6 +164,15 @@
 		font-family: Georgia, 'Times New Roman', serif;
 		font-size: 0.96rem;
 		line-height: 1.65;
+	}
+
+	.preview-body.article {
+		height: auto;
+		min-height: 320px;
+		overflow: visible;
+		padding: 0;
+		background: transparent;
+		font-size: 1.05rem;
 	}
 
 	.preview-body :global(h1),
