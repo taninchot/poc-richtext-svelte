@@ -108,6 +108,16 @@ function publicObjectUrl(publicBaseUrl: string, key: string) {
 	return `${trimTrailingSlash(publicBaseUrl)}/${trimSlashes(key)}`;
 }
 
+function cleanObjectKey(key: string) {
+	const cleanKey = trimSlashes(key.trim());
+
+	if (!cleanKey || cleanKey.includes('..') || /[\\]/.test(cleanKey)) {
+		throw new UploadConfigurationError('Invalid uploaded object key.');
+	}
+
+	return cleanKey;
+}
+
 export function resolveUploadStorage(
 	env: UploadEnv = privateEnv,
 	rootDirectory = cwd()
@@ -240,5 +250,28 @@ export async function createPresignedImageUpload(
 		key,
 		uploadUrl,
 		url: publicObjectUrl(storage.publicBaseUrl, key)
+	};
+}
+
+export function resolveStoredImageObject(
+	key: string,
+	dependencies: Pick<UploadStorageDependencies, 'env' | 'rootDirectory'> = {}
+): StoredImageObject {
+	const storage = resolveUploadStorage(dependencies.env, dependencies.rootDirectory);
+
+	if (storage.type !== 'r2') {
+		throw new UploadConfigurationError('Confirmed uploads require R2 storage.');
+	}
+
+	const cleanKey = cleanObjectKey(key);
+	const prefix = storage.prefix ? `${storage.prefix}/` : '';
+
+	if (prefix && !cleanKey.startsWith(prefix)) {
+		throw new UploadConfigurationError('Uploaded object key is outside the configured prefix.');
+	}
+
+	return {
+		key: cleanKey,
+		url: publicObjectUrl(storage.publicBaseUrl, cleanKey)
 	};
 }

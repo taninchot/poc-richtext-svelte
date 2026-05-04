@@ -51,6 +51,8 @@
 
 	type UploadResponse = {
 		headers?: Record<string, string>;
+		id?: string;
+		key?: string;
 		url?: string;
 		message?: string;
 		strategy?: 'presigned' | 'proxy';
@@ -140,6 +142,32 @@
 		return result.url;
 	}
 
+	async function confirmPresignedUpload(file: File, result: UploadResponse) {
+		if (!result.key) {
+			throw new Error('Upload key was not returned.');
+		}
+
+		const response = await fetch('/api/uploads/confirm', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				key: result.key,
+				name: file.name,
+				size: file.size,
+				type: file.type
+			})
+		});
+		const confirmation = (await response.json()) as UploadResponse;
+
+		if (!response.ok || !confirmation.url) {
+			throw new Error(confirmation.message ?? 'Upload confirmation failed.');
+		}
+
+		return confirmation.url;
+	}
+
 	async function uploadWithPresignedUrl(file: File) {
 		const response = await fetch('/api/uploads', {
 			method: 'POST',
@@ -178,7 +206,7 @@
 			throw new Error('Image upload to storage failed.');
 		}
 
-		return result.url;
+		return confirmPresignedUpload(file, result);
 	}
 
 	async function uploadImageFile(file: File, editor: Editor) {

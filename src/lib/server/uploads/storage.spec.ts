@@ -3,6 +3,7 @@ import {
 	createPresignedImageUpload,
 	UploadConfigurationError,
 	resolveUploadStorage,
+	resolveStoredImageObject,
 	storeImageObject
 } from './storage';
 
@@ -123,5 +124,22 @@ describe('createPresignedImageUpload', () => {
 				{ env: {} }
 			)
 		).rejects.toThrow(UploadConfigurationError);
+	});
+});
+
+describe('resolveStoredImageObject', () => {
+	it('rebuilds the public URL for a confirmed R2 object key', () => {
+		const result = resolveStoredImageObject('editor-uploads/sample.png', { env: r2Env });
+
+		expect(result).toEqual({
+			key: 'editor-uploads/sample.png',
+			url: 'https://assets.example.com/richtext/editor-uploads/sample.png'
+		});
+	});
+
+	it('rejects confirmed keys outside the configured R2 prefix', () => {
+		expect(() => resolveStoredImageObject('other/sample.png', { env: r2Env })).toThrow(
+			UploadConfigurationError
+		);
 	});
 });

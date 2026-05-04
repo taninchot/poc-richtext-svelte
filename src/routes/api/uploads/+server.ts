@@ -8,37 +8,13 @@ import {
 	storeImageObject,
 	type StoredImageObject
 } from '$lib/server/uploads/storage';
-
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const IMAGE_EXTENSIONS: Record<string, string> = {
-	'image/gif': 'gif',
-	'image/jpeg': 'jpg',
-	'image/png': 'png',
-	'image/webp': 'webp'
-};
+import { validateImageMetadata } from '$lib/server/uploads/validation';
 
 type UploadIntent = {
 	name?: unknown;
 	size?: unknown;
 	type?: unknown;
 };
-
-function imageExtension(mimeType: string) {
-	return IMAGE_EXTENSIONS[mimeType];
-}
-
-function validateImageMetadata({ type, size }: { type: string; size: number }) {
-	const extension = imageExtension(type);
-	if (!extension) {
-		return { message: 'Use PNG, JPG, WebP, or GIF.', status: 415 };
-	}
-
-	if (size > MAX_IMAGE_BYTES) {
-		return { message: 'Image must be 5MB or smaller.', status: 413 };
-	}
-
-	return { extension };
-}
 
 function createImageFilename(extension: string) {
 	return `${Date.now()}-${randomUUID()}.${extension}`;
@@ -167,17 +143,10 @@ async function createPresignedUpload(request: Request) {
 			filename: createImageFilename(validation.extension),
 			contentType: intent.type
 		});
-		const upload = await recordUpload({
-			originalName: intent.name,
-			size: intent.size,
-			storedObject: presignedUpload,
-			type: intent.type
-		});
 
 		return json({
 			expiresIn: presignedUpload.expiresIn,
 			headers: presignedUpload.headers,
-			id: upload.id,
 			key: presignedUpload.key,
 			name: intent.name,
 			size: intent.size,
