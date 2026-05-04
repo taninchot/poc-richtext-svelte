@@ -1,0 +1,13 @@
+node_modules
+.svelte-kit
+build
+.git
+.github
+
+.env
+.env.*
+!.env.example
+
+.dev-server.*.log
+static/uploads/*
+!static/uploads/.gitkeep
